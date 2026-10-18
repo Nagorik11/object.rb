@@ -1,0 +1,6 @@
+<h1>Confirma tu acceso</h1>
+<p>Vas a iniciar sesión como <strong><%= h @email %></strong>. Continúa solo si este es tu correo.</p>
+<form method="post" action="/auth/email/confirm">
+  <input type="hidden" name="csrf_token" value="<%= h csrf_token %>">
+  <button type="submit">Entrar</button>
+</form>

@@ -1,0 +1,8 @@
+<h1>Entra con tu correo</h1>
+<p>Te enviaremos un enlace seguro. No necesitas contraseña.</p>
+<form method="post" action="/auth/email/request">
+  <input type="hidden" name="csrf_token" value="<%= h csrf_token %>">
+  <label for="email">Correo electrónico</label>
+  <input id="email" name="email" type="email" autocomplete="email" placeholder="tu@correo.com" maxlength="254" required>
+  <button type="submit">Enviarme el enlace</button>
+</form>

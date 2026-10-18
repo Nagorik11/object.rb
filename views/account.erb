@@ -1,0 +1,6 @@
+<h1>Ya estás dentro</h1>
+<p>Sesión iniciada con <strong><%= h @email %></strong>.</p>
+<form method="post" action="/logout">
+  <input type="hidden" name="csrf_token" value="<%= h csrf_token %>">
+  <button type="submit">Cerrar sesión</button>
+</form>
