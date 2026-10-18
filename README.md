@@ -1,5 +1,33 @@
 # object.rb
 
+## Frontend RD.Object en Cloudflare
+
+`worker.js` sirve el chat y el registro de visitantes con **nombre y foto de perfil**. Al guardar, crea un registro nuevo en `shared-db.users` con un UUID generado por el servidor y el rol `visitor`. El recuadro muestra ese UUID real, el nombre, la foto y el nivel Visitante. No genera IDs locales ni usa el UUID de otra persona.
+
+La cámara se activa únicamente al pulsar **Activar cámara**; también se puede elegir una foto. La imagen se recorta a 256 × 256 y se guarda como JPEG en `users.profile.visitor_photo`. Se pide confirmación para guardar nombre y foto. La imagen no realiza reconocimiento facial ni verifica identidades: coincidir en nombre o foto no permite entrar a una cuenta existente.
+
+Para habilitarlo en Cloudflare:
+
+1. En el Worker `object-rd`, enlaza la base D1 existente `shared-db` con el nombre **`SHARED_DB`**. Conserva el binding de Workers AI **`AI`**.
+2. Ejecuta [migrations/0001_visitor_sessions.sql](migrations/0001_visitor_sessions.sql) en esa base. Es una migración aditiva y repetible; no reemplaza `users` ni cambia sus filas existentes.
+3. Despliega `worker.js` junto con los módulos de `worker/`. Para Wrangler, copia `wrangler.example.jsonc` a `wrangler.jsonc` y coloca el UUID **de la base D1**, distinto del UUID del usuario. Si tu Worker tiene otros bindings o rutas, consérvalos también en la configuración antes de desplegar.
+
+Para ejecutar la migración desde Wrangler, el token también necesita permiso de edición de D1 en la cuenta correspondiente. Este cambio no se ha desplegado ni ha ejecutado la migración en la base real.
+
+El código usa las columnas de `users` mostradas en la base: `id`, `handle`, `display_name`, `email`, `locale`, `timezone`, `status`, `profile`, `meta`, `created_at`, `updated_at`. Los visitantes reciben un `handle` único, estado `active`, correo nulo y `profile.roles = ["visitor"]`. La compatibilidad con restricciones adicionales de la base real requiere validación cuando se disponga de acceso.
+
+La sesión de visitante dura 30 días en el mismo navegador, con una cookie Secure/HttpOnly y un token cuyo hash se almacena en `rd_visitor_sessions`. **Salir** revoca esa sesión; no elimina el perfil ni su foto. Borrar cookies o perder la sesión no permite recuperar una cuenta por nombre/foto: el acceso a cuentas existentes requiere su propio método de autenticación. El chat conserva el acceso público existente; este registro no asigna permisos de administrador.
+
+Se limitan los registros a cinco por IP en una hora, incluyendo los que luego cierran sesión. La foto se entrega solamente con la sesión correspondiente, no mediante una consulta pública por UUID. La validación automatizada usa SQLite local y no modifica `shared-db` ni demuestra un despliegue real.
+
+Pruebas del Worker con Node.js 24, sin instalar dependencias:
+
+```bash
+npm test
+```
+
+## Aplicación Ruby
+
 Aplicación Ruby/Sinatra con acceso por **magic link por correo**. No requiere contraseña ni SMS. Al confirmar un correo por primera vez se crea la cuenta; en los siguientes accesos se reutiliza.
 
 ## Desarrollo

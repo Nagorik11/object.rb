@@ -6,6 +6,9 @@
  * Archivo único: interfaz + API.
  * Configura un binding de Workers AI llamado AI.
  */
+import { identityResponse } from "./worker/identity.js";
+import initVisitorProfile from "./worker/visitor-client.js";
+
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 const SYSTEM_PROMPT = `
@@ -73,6 +76,19 @@ header{
 #browser-id{font-family:ui-monospace,monospace;color:#eaf0ff}
 .access-level{display:inline-block;color:#76dfb7;background:#76dfb710;border:1px solid #76dfb740;border-radius:6px;padding:4px 8px}
 .header-actions button{flex-shrink:0}
+.visitor-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;margin-bottom:8px}
+.visitor-actions{display:flex;gap:8px;margin-top:10px}
+.visitor-actions button{font-size:12px;padding:7px 9px}
+dialog{width:min(440px,calc(100% - 24px));max-height:90dvh;overflow:auto;background:#111b30;color:#eaf0ff;border:1px solid #3b4b69;border-radius:16px;padding:22px}
+dialog::backdrop{background:#000b}
+dialog h2{margin-top:0}
+.visitor-form{display:grid;padding:0;border:0;gap:12px}
+.visitor-form input[type=text]{width:100%;padding:12px;border:1px solid #3b4b69;border-radius:8px;background:#0b1426;color:white;font:inherit}
+.visitor-form input[type=file]{max-width:100%;font:inherit}
+.visitor-form label{line-height:1.5}
+.visitor-form p{margin:0;line-height:1.5;color:#96a4c0;font-size:13px}
+.portrait-preview{max-width:100%;width:200px;aspect-ratio:1;object-fit:cover;border-radius:12px;justify-self:center}
+#visitor-error{color:#ffb4b4}
 h1{font-size:22px;margin:0}
 small{color:#96a4c0}
 .panel{
@@ -162,10 +178,16 @@ footer{
   </div>
   <div class="header-actions">
     <dl class="access-card" aria-label="Identificación y acceso">
-      <dt id="browser-id-label">ID local del navegador</dt>
-      <dd id="browser-id">No disponible</dd>
+      <dt>Nombre</dt>
+      <dd><img id="visitor-avatar" class="visitor-avatar" alt="Tu foto de perfil" hidden> <span id="user-name">Sin registrar</span></dd>
+      <dt id="browser-id-label">UUID de usuario</dt>
+      <dd id="browser-id">Sin UUID asignado</dd>
       <dt>Nivel de acceso</dt>
-      <dd><span class="access-level">Visitante · acceso público</span></dd>
+      <dd><span id="access-level" class="access-level">Visitante · sin registrar</span></dd>
+      <dd class="visitor-actions">
+        <button id="visitor-register" type="button">Crear mi perfil</button>
+        <button id="visitor-logout" type="button" hidden>Salir</button>
+      </dd>
     </dl>
     <button id="clear" type="button">Nuevo chat</button>
   </div>
@@ -189,6 +211,30 @@ footer{
   Historial guardado en este navegador · Sin navegación web
 </footer>
 </main>
+<dialog id="visitor-dialog" aria-labelledby="visitor-title">
+  <h2 id="visitor-title">Preséntate</h2>
+  <form id="visitor-form" class="visitor-form">
+    <label for="visitor-name">¿Cómo te llamas?</label>
+    <input id="visitor-name" type="text" autocomplete="nickname" minlength="2" maxlength="80" required>
+    <p>Agrega una foto para tu perfil de visitante.</p>
+    <video id="visitor-video" class="portrait-preview" autoplay muted playsinline hidden></video>
+    <img id="visitor-preview" class="portrait-preview" alt="Vista previa de tu foto" hidden>
+    <div class="visitor-actions">
+      <button id="visitor-camera" type="button">Activar cámara</button>
+      <button id="visitor-capture" type="button" disabled>Tomar foto</button>
+    </div>
+    <label for="visitor-file">O elige una foto</label>
+    <input id="visitor-file" type="file" accept="image/*" capture="user">
+    <label><input id="visitor-consent" type="checkbox" required> Acepto guardar mi nombre y foto como perfil de visitante.</label>
+    <p>Recibirás un UUID propio y acceso de visitante. La foto no verifica tu identidad ni permite entrar a otras cuentas.</p>
+    <p id="visitor-error" role="alert"></p>
+    <div class="visitor-actions">
+      <button id="visitor-cancel" type="button">Cancelar</button>
+      <button id="visitor-save" type="submit">Crear mi perfil</button>
+    </div>
+  </form>
+</dialog>
+<script src="/visitor.js" defer></script>
 
 <script>
 (function(){
@@ -199,26 +245,8 @@ footer{
   const clear = document.getElementById("clear");
   const status = document.getElementById("status");
   const KEY = "rd-object-history-v2";
-  const ID_KEY = "rd-object-browser-id-v1";
   let busy = false;
   let history = [];
-
-  // Identificador local para reconocer este navegador, sin otorgar permisos.
-  try {
-    let browserId;
-    try { browserId = localStorage.getItem(ID_KEY); } catch (_) {}
-    if (typeof browserId !== "string" || !/^RD-[a-f0-9]{24}$/.test(browserId)) {
-      browserId = "RD-" + Array.from(crypto.getRandomValues(new Uint8Array(12)), function(byte){
-        return byte.toString(16).padStart(2, "0");
-      }).join("");
-      try {
-        localStorage.setItem(ID_KEY, browserId);
-      } catch (_) {
-        document.getElementById("browser-id-label").textContent = "ID de esta visita";
-      }
-    }
-    document.getElementById("browser-id").textContent = browserId;
-  } catch (_) {}
 
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -402,6 +430,13 @@ async function readBody(request, maxBytes) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const identity = await identityResponse(request, env);
+    if (identity) return identity;
+    if (request.method === "GET" && url.pathname === "/visitor.js") {
+      return new Response("(" + initVisitorProfile.toString() + ")();", {
+        headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
+      });
+    }
 
     if (request.method === "GET" && url.pathname === "/") {
       return new Response(HTML, {

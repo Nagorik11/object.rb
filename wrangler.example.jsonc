@@ -1,0 +1,13 @@
+{
+  "name": "object-rd",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": true,
+  "keep_vars": true,
+  "ai": { "binding": "AI" },
+  "d1_databases": [{
+    "binding": "SHARED_DB",
+    "database_name": "shared-db",
+    "database_id": "REEMPLAZAR_POR_UUID_DE_LA_BASE_NO_DEL_USUARIO"
+  }]
+}
