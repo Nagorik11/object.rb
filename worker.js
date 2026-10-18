@@ -6,7 +6,6 @@
  * Archivo único: interfaz + API.
  * Configura un binding de Workers AI llamado AI.
  */
-a
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 const SYSTEM_PROMPT = `
@@ -56,7 +55,24 @@ header{
   align-items:center;
   gap:12px;
   padding:12px 4px 20px;
+  flex-wrap:wrap;
 }
+.header-actions{display:flex;align-items:center;gap:12px;min-width:0;max-width:100%}
+.access-card{
+  margin:0;
+  padding:12px 14px;
+  border:1px solid #2a3958;
+  border-radius:12px;
+  background:#111b30;
+  min-width:0;
+  max-width:320px;
+}
+.access-card dt{font-size:11px;color:#96a4c0;margin-bottom:4px}
+.access-card dd{margin:0;font-size:12px;overflow-wrap:anywhere}
+.access-card dd + dt{margin-top:10px}
+#browser-id{font-family:ui-monospace,monospace;color:#eaf0ff}
+.access-level{display:inline-block;color:#76dfb7;background:#76dfb710;border:1px solid #76dfb740;border-radius:6px;padding:4px 8px}
+.header-actions button{flex-shrink:0}
 h1{font-size:22px;margin:0}
 small{color:#96a4c0}
 .panel{
@@ -129,6 +145,8 @@ footer{
 @media(max-width:520px){
   main{padding:8px}
   header{padding:10px 4px}
+  .header-actions{width:100%}
+  .access-card{flex:1;max-width:none}
   .msg{max-width:96%}
   form{gap:8px;padding:10px}
   button{padding:10px 12px}
@@ -142,7 +160,15 @@ footer{
     <h1>RD.Object</h1>
     <small>Inteligencia artificial · Cloudflare Workers</small>
   </div>
-  <button id="clear" type="button">Nuevo chat</button>
+  <div class="header-actions">
+    <dl class="access-card" aria-label="Identificación y acceso">
+      <dt id="browser-id-label">ID local del navegador</dt>
+      <dd id="browser-id">No disponible</dd>
+      <dt>Nivel de acceso</dt>
+      <dd><span class="access-level">Visitante · acceso público</span></dd>
+    </dl>
+    <button id="clear" type="button">Nuevo chat</button>
+  </div>
 </header>
 <section class="panel">
   <div class="status" id="status">Comprobando Workers AI...</div>
@@ -154,7 +180,7 @@ footer{
       maxlength="4000"
       aria-label="Mensaje para RD.Object"
       placeholder="Pregunta a RD.Object..."
-      requi
+      required
     ></textarea>
     <button id="send" type="submit">Enviar</button>
   </form>
@@ -173,8 +199,26 @@ footer{
   const clear = document.getElementById("clear");
   const status = document.getElementById("status");
   const KEY = "rd-object-history-v2";
+  const ID_KEY = "rd-object-browser-id-v1";
   let busy = false;
   let history = [];
+
+  // Identificador local para reconocer este navegador, sin otorgar permisos.
+  try {
+    let browserId;
+    try { browserId = localStorage.getItem(ID_KEY); } catch (_) {}
+    if (typeof browserId !== "string" || !/^RD-[a-f0-9]{24}$/.test(browserId)) {
+      browserId = "RD-" + Array.from(crypto.getRandomValues(new Uint8Array(12)), function(byte){
+        return byte.toString(16).padStart(2, "0");
+      }).join("");
+      try {
+        localStorage.setItem(ID_KEY, browserId);
+      } catch (_) {
+        document.getElementById("browser-id-label").textContent = "ID de esta visita";
+      }
+    }
+    document.getElementById("browser-id").textContent = browserId;
+  } catch (_) {}
 
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -232,7 +276,6 @@ footer{
     .catch(function(){
       status.textContent = "● No se pudo comprobar el servicio";
     });
-/*
   clear.addEventListener("click", function(){
     if (busy) return;
     history = [];
